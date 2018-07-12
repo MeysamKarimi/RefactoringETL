@@ -1,0 +1,112 @@
+rule CopyType
+transform g : ClassDiagram!Type
+to gOut : ClassDiagramOut!Type
+{
+	gOut.name := g.name;		
+}
+
+rule CopyClass
+transform c : ClassDiagram!Entity
+to cOut : ClassDiagramOut!Entity
+{
+	cOut.name = c.name;		
+}
+-- This rule copies properties (all of them) from classes which are not subclasses. (propertyForC)
+rule CopyPropertiesNonSubclasses
+transform p : ClassDiagram!Property
+to pOut : ClassDiagramOut!Property
+{
+		guard : (p.owner.generalisation.size()=0)	
+		pOut.name := p.name;		
+		pOut.type ::= p.type;
+		pOut.owner ::= p.owner;	
+}
+
+-- This rule copies those properties belonging to subclasses which are
+-- not repeated in all the subclasses of a class. (property2) , 
+rule CopyPropertiesSubclasses
+transform e : ClassDiagram!Entity
+to pOut : ClassDiagramOut!Property
+{	
+	guard : (e.generalisation.size()>0)
+	var parents = e.generalisation.specific;		
+	var properties = ClassDiagram!Property.allInstances().select(pr|pr.owner.generalisation.general = e.generalisation.general);
+	for(property in properties)
+	{	
+		if(parents.select(c|c.ownedAttribute.exists(pr|pr.name = property.name)).isEmpty())
+		{								
+			pOut.name = property.name;
+			pOut.type ::= property.type;					
+			pOut.owner ::= property.owner;
+		}
+	}	
+}
+
+-- it adds new attributes in a superclass when it corresponds (Property1)
+post
+{
+	delete ClassDiagramOut!Property.allInstances().select(p|p.name = null);
+} 
+rule CopyPropertiesSubclassesToSuperClass
+transform e : ClassDiagram!Entity
+to pOut : ClassDiagramOut!Property
+{	
+	guard : (e.generalisation.size()>0)
+	var parents = e.generalisation.specific;		
+	var properties = ClassDiagram!Property.allInstances().select(pr|pr.owner.generalisation.general = e.generalisation.general);
+	for(property in properties)
+	{					
+		if (parents.select(c|c.ownedAttribute.forAll(pr|pr.name = property.name)).ownedAttribute.notEmpty()) -- age kasi p1 ro joz a1 dare?
+		{			
+			if(not property.owner.generalisation.general.ownedAttribute.includes(property))
+			{							
+				-- 1 
+				if(ClassDiagramOut!Property.allInstances().select(pr|pr.name = property.name).size()=0 ) -- prevent duplicate
+				{--else3
+					var pn = new ClassDiagramOut!Property;
+					pn.name = property.name;
+					pn.type ::= property.type;					
+					-- 2
+					if(ClassDiagramOut!Entity.select(en|en.name = "c1").size() =0 ) -- prevent duplicate
+					{	
+						var en = new ClassDiagramOut!Entity;
+						en.name = "c1";						
+						en.ownedAttribute.add(pn);
+						-- 3				
+						var gn = new ClassDiagramOut!Generalization;
+						for(gg in property.owner.generalisation.general)
+						{							
+							gn.general ::= gg;													
+							gn.specific = en;							
+						}										
+						-- 4
+						var gn2 = new ClassDiagramOut!Generalization;
+						gn2.general = en;						
+						for(pp in property.owner)
+						{gn2.specific ::= pp;}												
+					}						
+				}		
+				else
+				{					
+					var e: ClassDiagramOut!Entity;
+					if(ClassDiagramOut!Entity.allInstances().select(en|en.name = property.owner.name).size() = 0)
+					{									
+						var enn = new ClassDiagramOut!Entity;
+						enn.name = property.owner.name;
+						e = enn;						
+					}
+					else
+					{						
+						e = ClassDiagramOut!Entity.allInstances().select(en|en.name = property.owner.name).first;						
+					}					
+					var gn3 = new ClassDiagramOut!Generalization;					
+					for(gg3 in ClassDiagramOut!Property.allInstances().select(pr|pr.name = property.name).first().owner)
+					{						
+						gn3.general = gg3;											
+						gn3.specific = e;						
+					}									
+				}							
+			}					
+		}				
+	}	
+}

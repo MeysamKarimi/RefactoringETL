@@ -1,0 +1,88 @@
+rule CopyType
+transform g : ClassDiagram!Type
+to gOut : ClassDiagramOut!Type
+{
+	gOut.name := g.name;		
+}
+
+rule CopyClass
+transform c : ClassDiagram!Entity
+to cOut : ClassDiagramOut!Entity
+{
+	cOut.name = c.name;		
+}
+
+-- This rule copies properties (all of them) from classes which are not subclasses. (propertyForC)
+rule CopyPropertiesNonSubclasses
+transform p : ClassDiagram!Property
+to pOut : ClassDiagramOut!Property
+{
+		guard : (p.owner.generalisation.size()=0)	
+		pOut.name := p.name;		
+		pOut.type ::= p.type;
+		pOut.owner ::= p.owner;	
+}
+
+-- This rule copies those properties belonging to subclasses which are
+-- not repeated in all the subclasses of a class. (property2) 
+rule CopyPropertiesSubclasses
+transform e : ClassDiagram!Entity
+to pOut : ClassDiagramOut!Property
+{	
+	guard : (e.generalisation.size()>0)
+	var parents = e.generalisation.specific;	
+	var properties = ClassDiagram!Property.allInstances().select(pr|pr.owner.generalisation.size() > 0);
+	for(property in properties)
+	{		
+		if(parents.select(c|c.ownedAttribute.exists(pr|pr.name = property.name)).isEmpty())
+		{								
+			pOut.name = property.name;
+			pOut.type ::= property.type;					
+			pOut.owner ::= property.owner;
+		}
+	}	
+}
+
+-- it adds new attributes in a superclass when it corresponds 
+rule CopyPropertiesSubclassesToSuperClass
+transform e : ClassDiagram!Entity
+to pOut : ClassDiagramOut!Property
+{	
+	guard : (e.generalisation.size()>0)
+	var parents = e.generalisation.specific;		
+	var properties = ClassDiagram!Property.allInstances().select(pr|pr.owner.generalisation.size() > 0);	
+	for(property in properties)
+	{			
+		if (parents.select(c|c.ownedAttribute.forAll(pr|pr.name = property.name)).ownedAttribute.notEmpty())
+		{					
+			if(not property.owner.generalisation.general.ownedAttribute.includes(property))
+			{							
+				for(e in property.owner.generalisation.general)
+				{
+					pOut.name = property.name;					
+					pOut.type ::= property.type;
+					pOut.owner ::= e;					
+				}				
+			}			
+		}				
+	}	
+}
+
+post
+{	
+	delete ClassDiagramOut!Property.allInstances().select(p|p.name = null);
+	delete ClassDiagramOut!Generalization.allInstances().select(g|g.general = null);
+}
+rule CopyGeneralization
+transform c : ClassDiagram!Entity
+to ggOut : ClassDiagramOut!Generalization
+{	
+	if(c.generalisation.notEmpty())
+	{			
+		for(gl in c.generalisation)
+		{			
+			ggOut.general ::= gl.general;						
+			ggOut.specific ::= gl.specific;			
+		}
+	}	
+}

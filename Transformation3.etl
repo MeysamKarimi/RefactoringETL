@@ -1,0 +1,61 @@
+rule CopyType
+transform g : ClassDiagram!Type
+to gOut : ClassDiagramOut!Type
+{
+	gOut.name := g.name;		
+}
+
+post
+{
+	delete ClassDiagramOut!Entity.allInstances().select(e|e.name = null);
+}
+rule CopyWithNoSuperClass
+transform e : ClassDiagram!Entity
+to eOut : ClassDiagramOut!Entity
+{
+	guard : (e.generalisation.size()=0)				
+	var parents = ClassDiagram!Entity.allInstances().select(pr|e.generalisation.size() = 0);
+	--1	
+	for(prt in e.ownedAttribute)
+	{			
+		var parentsSharedCommonProperty = parents.select(c|c.ownedAttribute.exists(pr|pr.name = prt.name));			
+		if(parentsSharedCommonProperty.size() > 1)
+		{
+			if(e = parentsSharedCommonProperty.first()) -- is A1?
+			{							
+				-- get first one of entities that shared an attribute to prevent multi creation
+				var property = new ClassDiagramOut!Property;															
+				var en = new ClassDiagramOut!Entity;
+				en.name = "C";									
+				property.name = prt.name;
+				property.type ::= prt.type;							
+				--3															
+				en.ownedAttribute.add(property);							
+				--4
+				var gn = new ClassDiagramOut!Generalization;				
+				gn.general = en;								
+				eOut.name = e.name;
+				gn.specific = eOut;				
+			}		
+			else
+			{
+				eOut.name = e.name;
+				for(cl in ClassDiagramOut!Entity.allInstances().select(e|e.ownedAttribute.name.includes(prt.name)))
+				{
+					var gn = new ClassDiagramOut!Generalization;				
+					gn.general = ClassDiagramOut!Entity.allInstances().select(e|e.ownedAttribute.name.includes(prt.name)).first();								
+					eOut.name = e.name;
+					gn.specific = eOut;				
+				}							
+			}		
+		}
+		else
+		{				
+			eOut.name = e.name;
+			var property = new ClassDiagramOut!Property;
+			property.name = prt.name;
+			property.type ::= prt.type;
+			property.owner ::= prt.owner;
+		}					
+	}		
+}
