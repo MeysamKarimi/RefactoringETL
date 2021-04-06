@@ -8,4 +8,4 @@ Case Study Assumptions:
   4- Single inheritance: There is no multiple or redundant inheritance.
  
  For more information on this topic you can read following paper:
- https://www.sciencedirect.com/science/article/pii/S0167642313001871
+ https://www.sciencedirect.com/science/article/abs/pii/S0164121220301382
